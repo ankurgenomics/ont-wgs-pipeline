@@ -1,12 +1,66 @@
-# ont-wgs-pipeline
+<div align="center">
 
-A Nextflow (DSL2) germline variant-calling pipeline for Oxford Nanopore (ONT) long-read
-whole-genome sequencing data, running on AWS Batch.
+# ONT WGS Pipeline
+
+<em>Oxford Nanopore long-read germline whole-genome sequencing: variants, structural variants, and native methylation.</em>
+
+<p>
+  <img src="https://img.shields.io/badge/Nextflow-DSL2-0DC09D?logo=nextflow&logoColor=white&style=flat-square" alt="Nextflow DSL2" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/platform-Oxford%20Nanopore-6C2EB9?style=flat-square" alt="Oxford Nanopore" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/caller-Clair3%20%2B%20Sniffles2-2563EB?style=flat-square" alt="Clair3 + Sniffles2" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/infra-AWS%20Batch-FF9900?logo=amazonaws&logoColor=white&style=flat-square" alt="AWS Batch" />
+  &nbsp;
+  <img src="https://img.shields.io/badge/license-MIT-22C55E?style=flat-square" alt="MIT License" />
+</p>
+
+<p>
+  <a href="#pipeline">Pipeline</a> &nbsp;•&nbsp;
+  <a href="#why-clair3--sniffles2-instead-of-the-short-read-sentiongatk-stack">Why long-read tools</a> &nbsp;•&nbsp;
+  <a href="#infrastructure">Infrastructure</a> &nbsp;•&nbsp;
+  <a href="#requirements">Requirements</a> &nbsp;•&nbsp;
+  <a href="#scope-note">Scope</a>
+</p>
+
+</div>
+
+---
+
+One alignment, three parallel calls: a neural-network SNV/indel caller, a structural-variant
+caller built for long-read span, and an optional native-methylation pileup straight from the
+basecalled signal — no separate bisulfite prep required.
 
 ## Pipeline
 
-Basecalled long-read FASTQ → aligned BAM → germline SNV/indel + structural-variant calls
-(+ optional 5mC methylation):
+```mermaid
+flowchart LR
+    FQ(["ONT basecalled<br/>FASTQ"]) --> ALN["<b>ALN</b><br/>minimap2 -ax map-ont"]
+    REF[("GRCh38<br/>reference")] --> ALN
+    ALN --> COV["<b>COVERAGE_QC</b><br/>mosdepth + flagstat"]
+    ALN --> CLAIR["<b>CLAIR3_CALL</b><br/>neural-net SNV/indel calling"]
+    MODEL[("Basecaller-matched<br/>Clair3 model")] --> CLAIR
+    ALN --> SNIFFLES["<b>SNIFFLES_SV</b><br/>structural variant calling"]
+    ALN -.optional.-> METH["<b>METH_CALL</b><br/>modkit 5mC pileup"]
+    COV --> QC[("Coverage +<br/>alignment QC")]
+    CLAIR --> VCF1[("SNV/indel<br/>VCF")]
+    SNIFFLES --> VCF2[("Structural variant<br/>VCF")]
+    METH --> BEDMETH[("5mC<br/>bedMethyl")]
+
+    style FQ fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    style REF fill:#f9fafb,stroke:#9ca3af,color:#111827
+    style MODEL fill:#f9fafb,stroke:#9ca3af,color:#111827
+    style ALN fill:#1e3a8a,stroke:#1e40af,color:#ffffff
+    style COV fill:#1e3a8a,stroke:#1e40af,color:#ffffff
+    style CLAIR fill:#1e3a8a,stroke:#1e40af,color:#ffffff
+    style SNIFFLES fill:#1e3a8a,stroke:#1e40af,color:#ffffff
+    style METH fill:#6b21a8,stroke:#7c3aed,color:#ffffff
+    style QC fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style VCF1 fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style VCF2 fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style BEDMETH fill:#f3e8ff,stroke:#a855f7,color:#4c1d95
+```
 
 1. **ALN** — [minimap2](https://github.com/lh3/minimap2) alignment (`-ax map-ont`) against
    GRCh38, sorted and indexed with samtools.
@@ -44,15 +98,16 @@ the placeholders marked `<your-...>` before running.
 
 ## Requirements
 
-- [Nextflow](https://www.nextflow.io/) 22.x+ (DSL2)
-- [minimap2](https://github.com/lh3/minimap2), [samtools](https://www.htslib.org/)
-- [Clair3](https://github.com/HKU-BAL/Clair3) + a model matching your basecaller chemistry/model
-  (`downloads/dl_reference_and_clair3_model.sh` fetches a current one from ONT's `rerio` model repo)
-- [Sniffles2](https://github.com/fritzsedlazeck/Sniffles)
-- [mosdepth](https://github.com/brentp/mosdepth)
-- [modkit](https://github.com/nanoporetech/modkit), if running methylation calling
-- Docker (or Singularity) for containerized execution
-- AWS CLI + Batch compute environment, if running on the `cloud` profile
+| | |
+|---|---|
+| Workflow engine | [Nextflow](https://www.nextflow.io/) 22.x+ (DSL2) |
+| Alignment | [minimap2](https://github.com/lh3/minimap2), [samtools](https://www.htslib.org/) |
+| SNV/indel calling | [Clair3](https://github.com/HKU-BAL/Clair3) + a model matched to your basecaller (`downloads/` fetches one from ONT's `rerio` model repo) |
+| SV calling | [Sniffles2](https://github.com/fritzsedlazeck/Sniffles) |
+| Coverage QC | [mosdepth](https://github.com/brentp/mosdepth) |
+| Methylation (optional) | [modkit](https://github.com/nanoporetech/modkit) |
+| Containers | Docker (or Singularity) |
+| Cloud | AWS CLI + Batch compute environment, if running the `cloud` profile |
 
 ## Scope note
 
