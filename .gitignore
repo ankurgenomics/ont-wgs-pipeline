@@ -1,0 +1,5 @@
+*.bam*
+*.gz
+*.nextflow*
+work/
+.nextflow.log*
